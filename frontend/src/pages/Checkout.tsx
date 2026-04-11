@@ -53,8 +53,10 @@ function Checkout() {
     return () => clearInterval(interval);
   }, [ticket?.reserved_until]);
 
+  const expired = timeLeft !== null && timeLeft <= 0;
+
   const handlePay = async () => {
-    if (!ticketId) return;
+    if (!ticketId || expired) return;
     setPaying(true);
     setError("");
     try {
@@ -103,7 +105,7 @@ function Checkout() {
         <p>Reservation expires in: {formatTime(timeLeft)}</p>
       )}
       {error && <p style={{ color: "red" }}>{error}</p>}
-      {!error && (
+      {!expired && !error && (
         <button onClick={handlePay} disabled={paying}>
           {paying ? "Processing..." : "Pay"}
         </button>

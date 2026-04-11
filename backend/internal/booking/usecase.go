@@ -3,6 +3,7 @@ package booking
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/KaoriNakajima/sturdyticket/backend/internal/event"
 )
@@ -31,6 +32,9 @@ func (uc *UseCase) CreateBooking(ctx context.Context, userID, ticketID string) (
 	}
 	if !ticket.IsReservedBy(userID) {
 		return nil, fmt.Errorf("ticket is reserved by another user")
+	}
+	if ticket.ReservedUntil != nil && time.Now().After(*ticket.ReservedUntil) {
+		return nil, fmt.Errorf("reservation has expired")
 	}
 
 	b := &Booking{

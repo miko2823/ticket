@@ -17,14 +17,13 @@ function TicketSelect() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selected, setSelected] = useState<Ticket | null>(null);
   const [reserving, setReserving] = useState(false);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!id) return;
     api
       .get<Ticket[]>(`/events/${id}/tickets`)
       .then(setTickets)
-      .catch((err) => setError(err.message));
+      .catch((err) => alert(err.message));
   }, [id]);
 
   const handleSelect = (ticket: Ticket) => {
@@ -35,12 +34,12 @@ function TicketSelect() {
   const handleProceed = async () => {
     if (!selected) return;
     setReserving(true);
-    setError("");
     try {
       await api.post(`/tickets/${selected.id}/reserve`, {});
       navigate(`/checkout?ticketId=${selected.id}&eventId=${id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reserve seat");
+      const msg = err instanceof Error ? err.message : "Failed to reserve seat";
+      alert(`This seat is no longer available: ${msg}\nPlease select another seat.`);
       setSelected(null);
       // Refresh tickets to show updated availability
       if (id) {
@@ -50,8 +49,6 @@ function TicketSelect() {
       setReserving(false);
     }
   };
-
-  if (error) return <p style={{ color: "red" }}>{error}</p>;
 
   return (
     <div className={styles.container}>
