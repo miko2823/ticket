@@ -21,8 +21,14 @@ type Ticket struct {
 	PriceJPY      Price
 	Status        TicketStatus
 	Version       int
+	ReservedBy    *string
 	ReservedUntil *time.Time
 	CreatedAt     time.Time
+}
+
+// IsReservedBy returns true if the ticket is reserved by the given user.
+func (t *Ticket) IsReservedBy(userID string) bool {
+	return t.Status == TicketStatusReserved && t.ReservedBy != nil && *t.ReservedBy == userID
 }
 
 // IsAvailable returns true if the ticket can be reserved.

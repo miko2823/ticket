@@ -74,6 +74,19 @@ export $(cat .env | xargs)
 go run ./cmd/server/
 ```
 
+For live reload during development, install [air](https://github.com/air-verse/air):
+
+```bash
+go install github.com/air-verse/air@latest
+```
+
+Then run `air` instead of `go run`:
+
+```bash
+export $(cat .env | xargs)
+air
+```
+
 Verify it's running:
 
 ```bash

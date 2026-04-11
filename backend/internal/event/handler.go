@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/KaoriNakajima/sturdyticket/backend/internal/auth"
 	"github.com/KaoriNakajima/sturdyticket/backend/pkg/response"
 )
 
@@ -92,7 +93,8 @@ func (h *Handler) GetTicket(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ReserveTicket(w http.ResponseWriter, r *http.Request) {
 	ticketID := chi.URLParam(r, "ticketId")
-	ticket, err := h.useCase.ReserveTicket(r.Context(), ticketID)
+	userID := auth.UserIDFromContext(r.Context())
+	ticket, err := h.useCase.ReserveTicket(r.Context(), ticketID, userID)
 	if err != nil {
 		response.Error(w, http.StatusConflict, err.Error())
 		return

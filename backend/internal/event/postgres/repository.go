@@ -53,7 +53,7 @@ func (r *Repository) FindTicketsByEventID(ctx context.Context, eventID string) (
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, event_id, seat_label, price_jpy,
 			CASE WHEN status = 'reserved' AND reserved_until < now() THEN 'available' ELSE status END,
-			version, reserved_until, created_at
+			version, reserved_by, reserved_until, created_at
 		FROM tickets WHERE event_id = $1 ORDER BY seat_label`,
 		eventID)
 	if err != nil {
@@ -64,7 +64,7 @@ func (r *Repository) FindTicketsByEventID(ctx context.Context, eventID string) (
 	var tickets []event.Ticket
 	for rows.Next() {
 		var t event.Ticket
-		if err := rows.Scan(&t.ID, &t.EventID, &t.SeatLabel, &t.PriceJPY, &t.Status, &t.Version, &t.ReservedUntil, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.EventID, &t.SeatLabel, &t.PriceJPY, &t.Status, &t.Version, &t.ReservedBy, &t.ReservedUntil, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		tickets = append(tickets, t)
@@ -77,9 +77,9 @@ func (r *Repository) FindTicketByID(ctx context.Context, id string) (*event.Tick
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, event_id, seat_label, price_jpy,
 			CASE WHEN status = 'reserved' AND reserved_until < now() THEN 'available' ELSE status END,
-			version, reserved_until, created_at
+			version, reserved_by, reserved_until, created_at
 		FROM tickets WHERE id = $1`, id).
-		Scan(&t.ID, &t.EventID, &t.SeatLabel, &t.PriceJPY, &t.Status, &t.Version, &t.ReservedUntil, &t.CreatedAt)
+		Scan(&t.ID, &t.EventID, &t.SeatLabel, &t.PriceJPY, &t.Status, &t.Version, &t.ReservedBy, &t.ReservedUntil, &t.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -87,15 +87,17 @@ func (r *Repository) FindTicketByID(ctx context.Context, id string) (*event.Tick
 }
 
 // ReserveTicket atomically reserves a ticket using optimistic locking.
-// Returns an error if the ticket was already taken (version mismatch or not available).
-func (r *Repository) ReserveTicket(ctx context.Context, ticketID string, currentVersion int, reservedUntil time.Time) error {
+// Stores the userID so only the reserving user can complete the booking.
+// NOTE: At scale, this hold would move to Redis (key=ticketID, value=userID, TTL=5min)
+// to separate the high-contention hold phase from the durable booking phase.
+func (r *Repository) ReserveTicket(ctx context.Context, ticketID string, currentVersion int, userID string, reservedUntil time.Time) error {
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE tickets
-		SET status = 'reserved', version = version + 1, reserved_until = $3
+		SET status = 'reserved', version = version + 1, reserved_by = $3, reserved_until = $4
 		WHERE id = $1
 			AND version = $2
 			AND (status = 'available' OR (status = 'reserved' AND reserved_until < now()))`,
-		ticketID, currentVersion, reservedUntil)
+		ticketID, currentVersion, userID, reservedUntil)
 	if err != nil {
 		return err
 	}
@@ -107,7 +109,7 @@ func (r *Repository) ReserveTicket(ctx context.Context, ticketID string, current
 
 func (r *Repository) UpdateTicketStatus(ctx context.Context, ticketID string, status event.TicketStatus) error {
 	_, err := r.pool.Exec(ctx,
-		"UPDATE tickets SET status = $2, reserved_until = NULL WHERE id = $1",
+		"UPDATE tickets SET status = $2, reserved_by = NULL, reserved_until = NULL WHERE id = $1",
 		ticketID, status)
 	return err
 }
@@ -115,7 +117,7 @@ func (r *Repository) UpdateTicketStatus(ctx context.Context, ticketID string, st
 // ReleaseExpiredReservations resets expired reserved tickets back to available.
 func (r *Repository) ReleaseExpiredReservations(ctx context.Context, now time.Time) error {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE tickets SET status = 'available', reserved_until = NULL
+		`UPDATE tickets SET status = 'available', reserved_by = NULL, reserved_until = NULL
 		WHERE status = 'reserved' AND reserved_until < $1`, now)
 	return err
 }

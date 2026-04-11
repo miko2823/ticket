@@ -31,8 +31,8 @@ func (uc *UseCase) GetTicket(ctx context.Context, id string) (*Ticket, error) {
 	return uc.repo.FindTicketByID(ctx, id)
 }
 
-// ReserveTicket checks availability and reserves a ticket for 5 minutes.
-func (uc *UseCase) ReserveTicket(ctx context.Context, ticketID string) (*Ticket, error) {
+// ReserveTicket checks availability and reserves a ticket for 5 minutes for the given user.
+func (uc *UseCase) ReserveTicket(ctx context.Context, ticketID, userID string) (*Ticket, error) {
 	ticket, err := uc.repo.FindTicketByID(ctx, ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("ticket not found")
@@ -44,11 +44,12 @@ func (uc *UseCase) ReserveTicket(ctx context.Context, ticketID string) (*Ticket,
 	}
 
 	reservedUntil := now.Add(ReservationDuration)
-	if err := uc.repo.ReserveTicket(ctx, ticketID, ticket.Version, reservedUntil); err != nil {
+	if err := uc.repo.ReserveTicket(ctx, ticketID, ticket.Version, userID, reservedUntil); err != nil {
 		return nil, err
 	}
 
 	ticket.Status = TicketStatusReserved
+	ticket.ReservedBy = &userID
 	ticket.ReservedUntil = &reservedUntil
 	return ticket, nil
 }

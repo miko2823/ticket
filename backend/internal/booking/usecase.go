@@ -29,6 +29,9 @@ func (uc *UseCase) CreateBooking(ctx context.Context, userID, ticketID string) (
 	if ticket.Status != event.TicketStatusReserved {
 		return nil, fmt.Errorf("ticket is not reserved")
 	}
+	if !ticket.IsReservedBy(userID) {
+		return nil, fmt.Errorf("ticket is reserved by another user")
+	}
 
 	b := &Booking{
 		UserID:   userID,
