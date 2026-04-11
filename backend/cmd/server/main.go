@@ -55,7 +55,7 @@ func main() {
 
 	// Initialize booking domain
 	bookingRepo := bookingpg.NewRepository(pool)
-	bookingUseCase := booking.NewUseCase(bookingRepo)
+	bookingUseCase := booking.NewUseCase(bookingRepo, eventRepo)
 	bookingHandler := booking.NewHandler(bookingUseCase)
 
 	r := chi.NewRouter()

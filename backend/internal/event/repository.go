@@ -12,5 +12,6 @@ type Repository interface {
 	FindTicketsByEventID(ctx context.Context, eventID string) ([]Ticket, error)
 	FindTicketByID(ctx context.Context, id string) (*Ticket, error)
 	ReserveTicket(ctx context.Context, ticketID string, currentVersion int, reservedUntil time.Time) error
+	UpdateTicketStatus(ctx context.Context, ticketID string, status TicketStatus) error
 	ReleaseExpiredReservations(ctx context.Context, now time.Time) error
 }

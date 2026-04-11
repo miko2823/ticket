@@ -105,6 +105,13 @@ func (r *Repository) ReserveTicket(ctx context.Context, ticketID string, current
 	return nil
 }
 
+func (r *Repository) UpdateTicketStatus(ctx context.Context, ticketID string, status event.TicketStatus) error {
+	_, err := r.pool.Exec(ctx,
+		"UPDATE tickets SET status = $2, reserved_until = NULL WHERE id = $1",
+		ticketID, status)
+	return err
+}
+
 // ReleaseExpiredReservations resets expired reserved tickets back to available.
 func (r *Repository) ReleaseExpiredReservations(ctx context.Context, now time.Time) error {
 	_, err := r.pool.Exec(ctx,

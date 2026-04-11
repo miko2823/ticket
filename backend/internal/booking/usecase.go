@@ -3,21 +3,33 @@ package booking
 import (
 	"context"
 	"fmt"
+
+	"github.com/KaoriNakajima/sturdyticket/backend/internal/event"
 )
 
 // UseCase is the application service for the Booking bounded context.
 type UseCase struct {
-	repo Repository
+	repo      Repository
+	eventRepo event.Repository
 }
 
-func NewUseCase(repo Repository) *UseCase {
-	return &UseCase{repo: repo}
+func NewUseCase(repo Repository, eventRepo event.Repository) *UseCase {
+	return &UseCase{repo: repo, eventRepo: eventRepo}
 }
 
-// CreateBooking creates a pending booking for a reserved ticket.
+// CreateBooking creates a booking and marks the ticket as sold.
 // In production this would enqueue a Cloud Tasks job for async confirmation.
-// For now it creates the booking as pending (simulating the async pattern).
+// For now it confirms immediately (simulating payment success).
 func (uc *UseCase) CreateBooking(ctx context.Context, userID, ticketID string) (*Booking, error) {
+	// Verify the ticket is still reserved
+	ticket, err := uc.eventRepo.FindTicketByID(ctx, ticketID)
+	if err != nil {
+		return nil, fmt.Errorf("ticket not found")
+	}
+	if ticket.Status != event.TicketStatusReserved {
+		return nil, fmt.Errorf("ticket is not reserved")
+	}
+
 	b := &Booking{
 		UserID:   userID,
 		TicketID: ticketID,
@@ -28,8 +40,11 @@ func (uc *UseCase) CreateBooking(ctx context.Context, userID, ticketID string) (
 	}
 
 	// TODO: enqueue Cloud Tasks job for async confirmation
-	// For now, confirm immediately (simulating payment success)
+	// For now, confirm immediately and mark ticket as sold
 	if err := uc.repo.UpdateStatus(ctx, b.ID, BookingStatusConfirmed); err != nil {
+		return nil, err
+	}
+	if err := uc.eventRepo.UpdateTicketStatus(ctx, ticketID, event.TicketStatusSold); err != nil {
 		return nil, err
 	}
 	b.Status = BookingStatusConfirmed
@@ -47,7 +62,7 @@ func (uc *UseCase) GetUserBookings(ctx context.Context, userID string) ([]Bookin
 	return uc.repo.FindByUserID(ctx, userID)
 }
 
-// CancelBooking cancels a booking if allowed.
+// CancelBooking cancels a booking and releases the ticket.
 func (uc *UseCase) CancelBooking(ctx context.Context, id, userID string) error {
 	b, err := uc.repo.FindByID(ctx, id)
 	if err != nil {
@@ -59,5 +74,8 @@ func (uc *UseCase) CancelBooking(ctx context.Context, id, userID string) error {
 	if !b.CanBeCancelled() {
 		return fmt.Errorf("booking cannot be cancelled")
 	}
-	return uc.repo.UpdateStatus(ctx, id, BookingStatusCancelled)
+	if err := uc.repo.UpdateStatus(ctx, id, BookingStatusCancelled); err != nil {
+		return err
+	}
+	return uc.eventRepo.UpdateTicketStatus(ctx, b.TicketID, event.TicketStatusAvailable)
 }
