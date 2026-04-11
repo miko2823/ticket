@@ -3,6 +3,7 @@ import { useAuth } from "./auth/AuthContext";
 import Header from "./components/Header";
 import Home from "./pages/Home";
 import EventDetail from "./pages/EventDetail";
+import TicketSelect from "./pages/TicketSelect";
 import Checkout from "./pages/Checkout";
 import MyTickets from "./pages/MyTickets";
 import Login from "./pages/Login";
@@ -19,6 +20,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/events/:id/tickets" element={<TicketSelect />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/my-tickets" element={<MyTickets />} />
       </Routes>

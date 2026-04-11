@@ -13,6 +13,8 @@ import (
 	"google.golang.org/api/option"
 
 	"github.com/KaoriNakajima/sturdyticket/backend/internal/auth"
+	"github.com/KaoriNakajima/sturdyticket/backend/internal/booking"
+	bookingpg "github.com/KaoriNakajima/sturdyticket/backend/internal/booking/postgres"
 	"github.com/KaoriNakajima/sturdyticket/backend/internal/event"
 	eventpg "github.com/KaoriNakajima/sturdyticket/backend/internal/event/postgres"
 	"github.com/KaoriNakajima/sturdyticket/backend/pkg/response"
@@ -51,6 +53,11 @@ func main() {
 	eventUseCase := event.NewUseCase(eventRepo)
 	eventHandler := event.NewHandler(eventUseCase)
 
+	// Initialize booking domain
+	bookingRepo := bookingpg.NewRepository(pool)
+	bookingUseCase := booking.NewUseCase(bookingRepo)
+	bookingHandler := booking.NewHandler(bookingUseCase)
+
 	r := chi.NewRouter()
 
 	// TODO: set up middleware (logging, recovery, CORS, rate limiting, bot detection)
@@ -60,7 +67,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "ok")
 	})
-	eventHandler.RegisterRoutes(r)
+	eventHandler.RegisterPublicRoutes(r)
 
 	// Protected routes (require Firebase auth)
 	r.Group(func(r chi.Router) {
@@ -70,6 +77,9 @@ func main() {
 			uid := auth.UserIDFromContext(r.Context())
 			response.JSON(w, http.StatusOK, map[string]string{"uid": uid})
 		})
+
+		eventHandler.RegisterProtectedRoutes(r)
+		bookingHandler.RegisterRoutes(r)
 	})
 
 	port := os.Getenv("PORT")

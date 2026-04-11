@@ -26,11 +26,12 @@ type eventResponse struct {
 }
 
 type ticketResponse struct {
-	ID        string `json:"id"`
-	EventID   string `json:"event_id"`
-	SeatLabel string `json:"seat_label"`
-	PriceJPY  int    `json:"price_jpy"`
-	Status    string `json:"status"`
+	ID            string  `json:"id"`
+	EventID       string  `json:"event_id"`
+	SeatLabel     string  `json:"seat_label"`
+	PriceJPY      int     `json:"price_jpy"`
+	Status        string  `json:"status"`
+	ReservedUntil *string `json:"reserved_until,omitempty"`
 }
 
 func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
@@ -77,4 +78,39 @@ func (h *Handler) GetTickets(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	response.JSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) GetTicket(w http.ResponseWriter, r *http.Request) {
+	ticketID := chi.URLParam(r, "ticketId")
+	t, err := h.useCase.GetTicket(r.Context(), ticketID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "ticket not found")
+		return
+	}
+	response.JSON(w, http.StatusOK, toTicketResponse(t))
+}
+
+func (h *Handler) ReserveTicket(w http.ResponseWriter, r *http.Request) {
+	ticketID := chi.URLParam(r, "ticketId")
+	ticket, err := h.useCase.ReserveTicket(r.Context(), ticketID)
+	if err != nil {
+		response.Error(w, http.StatusConflict, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, toTicketResponse(ticket))
+}
+
+func toTicketResponse(t *Ticket) ticketResponse {
+	resp := ticketResponse{
+		ID:        t.ID,
+		EventID:   t.EventID,
+		SeatLabel: string(t.SeatLabel),
+		PriceJPY:  int(t.PriceJPY),
+		Status:    string(t.Status),
+	}
+	if t.ReservedUntil != nil {
+		s := t.ReservedUntil.Format(time.RFC3339)
+		resp.ReservedUntil = &s
+	}
+	return resp
 }

@@ -15,14 +15,30 @@ type Event struct {
 
 // Ticket is an entity belonging to the Event aggregate.
 type Ticket struct {
-	ID        string
-	EventID   string
-	SeatLabel SeatLabel
-	PriceJPY  Price
-	Status    TicketStatus
-	Version   int
-	CreatedAt time.Time
+	ID            string
+	EventID       string
+	SeatLabel     SeatLabel
+	PriceJPY      Price
+	Status        TicketStatus
+	Version       int
+	ReservedUntil *time.Time
+	CreatedAt     time.Time
 }
+
+// IsAvailable returns true if the ticket can be reserved.
+// A ticket is available if its status is "available", or if it was
+// reserved but the reservation has expired.
+func (t *Ticket) IsAvailable(now time.Time) bool {
+	if t.Status == TicketStatusAvailable {
+		return true
+	}
+	if t.Status == TicketStatusReserved && t.ReservedUntil != nil && now.After(*t.ReservedUntil) {
+		return true
+	}
+	return false
+}
+
+const ReservationDuration = 5 * time.Minute
 
 // SeatLabel is a value object representing a seat identifier (e.g. "A-12").
 type SeatLabel string
