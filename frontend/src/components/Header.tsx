@@ -1,5 +1,5 @@
 import { signOut } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { auth } from "../auth/firebase";
 import { useAuth } from "../auth/AuthContext";
 
@@ -17,6 +17,7 @@ function Header() {
   return (
     <header>
       <span>{user.email}</span>
+      <Link to="/my-tickets">My Bookings</Link>
       <button onClick={handleSignOut}>Sign Out</button>
     </header>
   );
