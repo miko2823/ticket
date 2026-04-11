@@ -1,6 +1,8 @@
 package booking
 
 // Service is the domain service for the Booking bounded context.
+// Domain service methods will be added here when cross-aggregate
+// logic is needed (e.g. double-booking prevention checks).
 type Service struct {
 	repo Repository
 }
@@ -8,5 +10,3 @@ type Service struct {
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
-
-// TODO: domain service methods (double-booking prevention logic, etc.)

@@ -4,27 +4,21 @@ import "context"
 
 // UseCase is the application service for the Event bounded context.
 type UseCase struct {
-	service *Service
+	repo Repository
 }
 
-func NewUseCase(service *Service) *UseCase {
-	return &UseCase{service: service}
+func NewUseCase(repo Repository) *UseCase {
+	return &UseCase{repo: repo}
 }
 
-// ListEvents returns all events.
 func (uc *UseCase) ListEvents(ctx context.Context) ([]Event, error) {
-	// TODO: implement
-	return nil, nil
+	return uc.repo.FindAll(ctx)
 }
 
-// GetEvent returns a single event by ID.
 func (uc *UseCase) GetEvent(ctx context.Context, id string) (*Event, error) {
-	// TODO: implement
-	return nil, nil
+	return uc.repo.FindByID(ctx, id)
 }
 
-// GetTickets returns all tickets for an event.
 func (uc *UseCase) GetTickets(ctx context.Context, eventID string) ([]Ticket, error) {
-	// TODO: implement
-	return nil, nil
+	return uc.repo.FindTicketsByEventID(ctx, eventID)
 }

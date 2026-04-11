@@ -4,11 +4,11 @@ import "context"
 
 // UseCase is the application service for the Booking bounded context.
 type UseCase struct {
-	service *Service
+	repo Repository
 }
 
-func NewUseCase(service *Service) *UseCase {
-	return &UseCase{service: service}
+func NewUseCase(repo Repository) *UseCase {
+	return &UseCase{repo: repo}
 }
 
 // CreateBooking reserves a ticket and enqueues async confirmation.

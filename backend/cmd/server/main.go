@@ -9,14 +9,28 @@ import (
 
 	firebase "firebase.google.com/go/v4"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/api/option"
 
 	"github.com/KaoriNakajima/sturdyticket/backend/internal/auth"
+	"github.com/KaoriNakajima/sturdyticket/backend/internal/event"
+	eventpg "github.com/KaoriNakajima/sturdyticket/backend/internal/event/postgres"
 	"github.com/KaoriNakajima/sturdyticket/backend/pkg/response"
 )
 
 func main() {
 	ctx := context.Background()
+
+	// Connect to PostgreSQL
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
 
 	// Initialize Firebase Admin SDK
 	sa := option.WithCredentialsFile("serviceAccountKey.json")
@@ -32,17 +46,21 @@ func main() {
 
 	authMiddleware := auth.NewMiddleware(authClient)
 
+	// Initialize event domain
+	eventRepo := eventpg.NewRepository(pool)
+	eventUseCase := event.NewUseCase(eventRepo)
+	eventHandler := event.NewHandler(eventUseCase)
+
 	r := chi.NewRouter()
 
 	// TODO: set up middleware (logging, recovery, CORS, rate limiting, bot detection)
-	// TODO: connect to PostgreSQL
-	// TODO: register routes
 
 	// Public routes
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "ok")
 	})
+	eventHandler.RegisterRoutes(r)
 
 	// Protected routes (require Firebase auth)
 	r.Group(func(r chi.Router) {
