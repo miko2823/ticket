@@ -1,18 +1,22 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { onAuthStateChanged, type User } from "firebase/auth";
+import { auth } from "./firebase";
 
 interface AuthState {
-  uid: string | null;
+  user: User | null;
   loading: boolean;
 }
 
-const AuthContext = createContext<AuthState>({ uid: null, loading: true });
+const AuthContext = createContext<AuthState>({ user: null, loading: true });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({ uid: null, loading: true });
+  const [state, setState] = useState<AuthState>({ user: null, loading: true });
 
   useEffect(() => {
-    // TODO: initialize Firebase Auth and listen for auth state changes
-    setState({ uid: null, loading: false });
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setState({ user, loading: false });
+    });
+    return unsubscribe;
   }, []);
 
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
