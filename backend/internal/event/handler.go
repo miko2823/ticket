@@ -20,10 +20,12 @@ func NewHandler(useCase *UseCase) *Handler {
 }
 
 type eventResponse struct {
-	ID       string    `json:"id"`
-	Name     string    `json:"name"`
-	Venue    string    `json:"venue"`
-	StartsAt time.Time `json:"starts_at"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Venue             string    `json:"venue"`
+	StartsAt          time.Time `json:"starts_at"`
+	TicketingStartsAt time.Time `json:"ticketing_starts_at"`
+	TicketingEndsAt   time.Time `json:"ticketing_ends_at"`
 }
 
 type ticketResponse struct {
@@ -44,7 +46,7 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]eventResponse, len(events))
 	for i, e := range events {
-		out[i] = eventResponse{ID: e.ID, Name: e.Name, Venue: e.Venue, StartsAt: e.StartsAt}
+		out[i] = toEventResponse(&e)
 	}
 	response.JSON(w, http.StatusOK, out)
 }
@@ -57,7 +59,7 @@ func (h *Handler) GetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, eventResponse{ID: e.ID, Name: e.Name, Venue: e.Venue, StartsAt: e.StartsAt})
+	response.JSON(w, http.StatusOK, toEventResponse(e))
 }
 
 func (h *Handler) GetTickets(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +102,17 @@ func (h *Handler) ReserveTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, toTicketResponse(ticket))
+}
+
+func toEventResponse(e *Event) eventResponse {
+	return eventResponse{
+		ID:                e.ID,
+		Name:              e.Name,
+		Venue:             e.Venue,
+		StartsAt:          e.StartsAt,
+		TicketingStartsAt: e.TicketingStartsAt,
+		TicketingEndsAt:   e.TicketingEndsAt,
+	}
 }
 
 func toTicketResponse(t *Ticket) ticketResponse {

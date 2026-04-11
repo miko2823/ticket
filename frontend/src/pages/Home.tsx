@@ -7,6 +7,8 @@ interface Event {
   name: string;
   venue: string;
   starts_at: string;
+  ticketing_starts_at: string;
+  ticketing_ends_at: string;
 }
 
 function Home() {

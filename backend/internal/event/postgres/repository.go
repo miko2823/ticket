@@ -21,7 +21,7 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) FindAll(ctx context.Context) ([]event.Event, error) {
 	rows, err := r.pool.Query(ctx,
-		"SELECT id, name, venue, starts_at, created_at FROM events ORDER BY starts_at")
+		"SELECT id, name, venue, starts_at, ticketing_starts_at, ticketing_ends_at, created_at FROM events ORDER BY starts_at")
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func (r *Repository) FindAll(ctx context.Context) ([]event.Event, error) {
 	var events []event.Event
 	for rows.Next() {
 		var e event.Event
-		if err := rows.Scan(&e.ID, &e.Name, &e.Venue, &e.StartsAt, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &e.Venue, &e.StartsAt, &e.TicketingStartsAt, &e.TicketingEndsAt, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
@@ -41,8 +41,8 @@ func (r *Repository) FindAll(ctx context.Context) ([]event.Event, error) {
 func (r *Repository) FindByID(ctx context.Context, id string) (*event.Event, error) {
 	var e event.Event
 	err := r.pool.QueryRow(ctx,
-		"SELECT id, name, venue, starts_at, created_at FROM events WHERE id = $1", id).
-		Scan(&e.ID, &e.Name, &e.Venue, &e.StartsAt, &e.CreatedAt)
+		"SELECT id, name, venue, starts_at, ticketing_starts_at, ticketing_ends_at, created_at FROM events WHERE id = $1", id).
+		Scan(&e.ID, &e.Name, &e.Venue, &e.StartsAt, &e.TicketingStartsAt, &e.TicketingEndsAt, &e.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

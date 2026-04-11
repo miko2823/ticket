@@ -1,7 +1,7 @@
 INSERT INTO events (id, name, venue, starts_at) VALUES
   ('a1111111-1111-1111-1111-111111111111', 'Sturdy Summer Fest 2026', 'Tokyo Dome', '2026-08-15 18:00:00+09'),
-  ('a2222222-2222-2222-2222-222222222222', 'Jazz Night in Shibuya', 'Blue Note Tokyo', '2026-07-20 19:30:00+09'),
-  ('a3333333-3333-3333-3333-333333333333', 'Classical Evening', 'Suntory Hall', '2026-09-10 18:30:00+09');
+  ('a2222222-2222-2222-2222-222222222222', 'Jazz Night in Shibuya', 'Blue Note Tokyo', '2026-04-25 19:30:00+09'),
+  ('a3333333-3333-3333-3333-333333333333', 'Classical Evening', 'Suntory Hall', '2026-05-10 18:30:00+09');
 
 -- Sturdy Summer Fest 2026 tickets (10 seats)
 INSERT INTO tickets (event_id, seat_label, price_jpy) VALUES

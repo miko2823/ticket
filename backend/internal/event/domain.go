@@ -6,11 +6,18 @@ import (
 
 // Event is the aggregate root for the Event bounded context.
 type Event struct {
-	ID        string
-	Name      string
-	Venue     string
-	StartsAt  time.Time
-	CreatedAt time.Time
+	ID                string
+	Name              string
+	Venue             string
+	StartsAt          time.Time
+	TicketingStartsAt time.Time
+	TicketingEndsAt   time.Time
+	CreatedAt         time.Time
+}
+
+// IsTicketingOpen returns true if the current time is within the ticketing window.
+func (e *Event) IsTicketingOpen(now time.Time) bool {
+	return !now.Before(e.TicketingStartsAt) && now.Before(e.TicketingEndsAt)
 }
 
 // Ticket is an entity belonging to the Event aggregate.
