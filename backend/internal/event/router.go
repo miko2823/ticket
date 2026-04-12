@@ -13,4 +13,5 @@ func (h *Handler) RegisterPublicRoutes(r chi.Router) {
 // RegisterProtectedRoutes registers event routes that require auth.
 func (h *Handler) RegisterProtectedRoutes(r chi.Router) {
 	r.Post("/api/v1/tickets/{ticketId}/reserve", h.ReserveTicket)
+	r.Delete("/api/v1/tickets/{ticketId}/reserve", h.ReleaseTicket)
 }

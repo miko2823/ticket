@@ -104,6 +104,16 @@ func (h *Handler) ReserveTicket(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, toTicketResponse(ticket))
 }
 
+func (h *Handler) ReleaseTicket(w http.ResponseWriter, r *http.Request) {
+	ticketID := chi.URLParam(r, "ticketId")
+	userID := auth.UserIDFromContext(r.Context())
+	if err := h.useCase.ReleaseTicket(r.Context(), ticketID, userID); err != nil {
+		response.Error(w, http.StatusConflict, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "released"})
+}
+
 func toEventResponse(e *Event) eventResponse {
 	return eventResponse{
 		ID:                e.ID,

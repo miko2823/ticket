@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 
 interface Ticket {
@@ -17,7 +17,9 @@ interface BookingResponse {
 
 function Checkout() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const ticketId = searchParams.get("ticketId");
+  const eventId = searchParams.get("eventId");
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [booking, setBooking] = useState<BookingResponse | null>(null);
   const [paying, setPaying] = useState(false);
@@ -71,6 +73,22 @@ function Checkout() {
     }
   };
 
+  const handleGoBack = async () => {
+    if (!confirm("Are you sure? Your seat reservation will be released.")) return;
+    if (ticketId) {
+      try {
+        await api.del(`/tickets/${ticketId}/reserve`);
+      } catch {
+        // Reservation may have already expired — proceed anyway
+      }
+    }
+    if (eventId) {
+      navigate(`/events/${eventId}/tickets`);
+    } else {
+      navigate("/");
+    }
+  };
+
   if (!ticketId) return <p>No ticket selected.</p>;
 
   if (booking) {
@@ -92,6 +110,9 @@ function Checkout() {
 
   return (
     <div>
+      <a href="#" onClick={(e) => { e.preventDefault(); handleGoBack(); }}>
+        &larr; Go back
+      </a>
       <h1>Checkout</h1>
       {ticket && (
         <div>

@@ -63,3 +63,20 @@ func (uc *UseCase) ReserveTicket(ctx context.Context, ticketID, userID string) (
 	ticket.ReservedUntil = &reservedUntil
 	return ticket, nil
 }
+
+// ReleaseTicket releases a reservation if the user owns it.
+func (uc *UseCase) ReleaseTicket(ctx context.Context, ticketID, userID string) error {
+	ticket, err := uc.repo.FindTicketByID(ctx, ticketID)
+	if err != nil {
+		return fmt.Errorf("ticket not found")
+	}
+
+	if ticket.Status != TicketStatusReserved {
+		return fmt.Errorf("ticket is not reserved")
+	}
+	if !ticket.IsReservedBy(userID) {
+		return fmt.Errorf("ticket is not reserved by you")
+	}
+
+	return uc.repo.UpdateTicketStatus(ctx, ticketID, TicketStatusAvailable)
+}
