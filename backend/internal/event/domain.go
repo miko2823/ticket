@@ -68,3 +68,68 @@ const (
 	TicketStatusSold      TicketStatus = "sold"
 	TicketStatusCancelled TicketStatus = "cancelled"
 )
+
+// SeatLayout is a value object holding the visual seat map configuration.
+type SeatLayout struct {
+	Canvas   CanvasSize      `json:"canvas"`
+	Stage    StageConfig     `json:"stage"`
+	Sections []SectionConfig `json:"sections"`
+	Seats    []SeatPosition  `json:"seats"`
+}
+
+// CanvasSize defines the coordinate space for the seat map.
+type CanvasSize struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+// StageConfig defines the stage area drawn on the seat map.
+type StageConfig struct {
+	X      int    `json:"x"`
+	Y      int    `json:"y"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Label  string `json:"label"`
+}
+
+// SectionConfig defines a named section with a display color.
+type SectionConfig struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Color string `json:"color"`
+}
+
+// SeatPosition defines where a seat is drawn on the canvas.
+type SeatPosition struct {
+	Label   string `json:"label"`
+	Section string `json:"section"`
+	X       int    `json:"x"`
+	Y       int    `json:"y"`
+	R       int    `json:"r"`
+}
+
+// SeatMapSeat is a seat with both visual position and live ticket data merged.
+type SeatMapSeat struct {
+	TicketID string `json:"ticket_id"`
+	Label    string `json:"label"`
+	Section  string `json:"section"`
+	X        int    `json:"x"`
+	Y        int    `json:"y"`
+	R        int    `json:"r"`
+	PriceJPY int    `json:"price_jpy"`
+	Status   string `json:"status"`
+}
+
+// SeatMapLayout holds the static parts of the seat map response.
+type SeatMapLayout struct {
+	Canvas   CanvasSize      `json:"canvas"`
+	Stage    StageConfig     `json:"stage"`
+	Sections []SectionConfig `json:"sections"`
+}
+
+// SeatMapResponse is the merged API response for the seat map endpoint.
+type SeatMapResponse struct {
+	EventID string        `json:"event_id"`
+	Layout  SeatMapLayout `json:"layout"`
+	Seats   []SeatMapSeat `json:"seats"`
+}

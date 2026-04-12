@@ -80,3 +80,53 @@ func (uc *UseCase) ReleaseTicket(ctx context.Context, ticketID, userID string) e
 
 	return uc.repo.UpdateTicketStatus(ctx, ticketID, TicketStatusAvailable)
 }
+
+// GetSeatMap returns the seat layout merged with live ticket availability.
+func (uc *UseCase) GetSeatMap(ctx context.Context, eventID string) (*SeatMapResponse, error) {
+	layout, err := uc.repo.FindSeatLayoutByEventID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("event not found")
+	}
+	if layout == nil {
+		return nil, fmt.Errorf("no seat layout for this event")
+	}
+
+	tickets, err := uc.repo.FindTicketsByEventID(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build lookup: seat_label -> ticket
+	ticketMap := make(map[string]*Ticket, len(tickets))
+	for i := range tickets {
+		ticketMap[string(tickets[i].SeatLabel)] = &tickets[i]
+	}
+
+	// Merge layout seats with live ticket data
+	seats := make([]SeatMapSeat, 0, len(layout.Seats))
+	for _, sp := range layout.Seats {
+		s := SeatMapSeat{
+			Label:   sp.Label,
+			Section: sp.Section,
+			X:       sp.X,
+			Y:       sp.Y,
+			R:       sp.R,
+		}
+		if t, ok := ticketMap[sp.Label]; ok {
+			s.TicketID = t.ID
+			s.PriceJPY = int(t.PriceJPY)
+			s.Status = string(t.Status)
+		}
+		seats = append(seats, s)
+	}
+
+	return &SeatMapResponse{
+		EventID: eventID,
+		Layout: SeatMapLayout{
+			Canvas:   layout.Canvas,
+			Stage:    layout.Stage,
+			Sections: layout.Sections,
+		},
+		Seats: seats,
+	}, nil
+}

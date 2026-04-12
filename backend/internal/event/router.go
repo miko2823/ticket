@@ -7,6 +7,7 @@ func (h *Handler) RegisterPublicRoutes(r chi.Router) {
 	r.Get("/api/v1/events", h.ListEvents)
 	r.Get("/api/v1/events/{id}", h.GetEvent)
 	r.Get("/api/v1/events/{id}/tickets", h.GetTickets)
+	r.Get("/api/v1/events/{id}/seatmap", h.GetSeatMap)
 	r.Get("/api/v1/tickets/{ticketId}", h.GetTicket)
 }
 

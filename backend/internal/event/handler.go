@@ -114,6 +114,16 @@ func (h *Handler) ReleaseTicket(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]string{"status": "released"})
 }
 
+func (h *Handler) GetSeatMap(w http.ResponseWriter, r *http.Request) {
+	eventID := chi.URLParam(r, "id")
+	seatMap, err := h.useCase.GetSeatMap(r.Context(), eventID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, seatMap)
+}
+
 func toEventResponse(e *Event) eventResponse {
 	return eventResponse{
 		ID:                e.ID,

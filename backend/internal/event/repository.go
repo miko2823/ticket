@@ -14,4 +14,5 @@ type Repository interface {
 	ReserveTicket(ctx context.Context, ticketID string, currentVersion int, userID string, reservedUntil time.Time) error
 	UpdateTicketStatus(ctx context.Context, ticketID string, status TicketStatus) error
 	ReleaseExpiredReservations(ctx context.Context, now time.Time) error
+	FindSeatLayoutByEventID(ctx context.Context, eventID string) (*SeatLayout, error)
 }

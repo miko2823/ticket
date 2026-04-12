@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -120,4 +121,22 @@ func (r *Repository) ReleaseExpiredReservations(ctx context.Context, now time.Ti
 		`UPDATE tickets SET status = 'available', reserved_by = NULL, reserved_until = NULL
 		WHERE status = 'reserved' AND reserved_until < $1`, now)
 	return err
+}
+
+func (r *Repository) FindSeatLayoutByEventID(ctx context.Context, eventID string) (*event.SeatLayout, error) {
+	var raw []byte
+	err := r.pool.QueryRow(ctx,
+		"SELECT seat_layout FROM events WHERE id = $1", eventID).
+		Scan(&raw)
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, nil
+	}
+	var layout event.SeatLayout
+	if err := json.Unmarshal(raw, &layout); err != nil {
+		return nil, fmt.Errorf("invalid seat layout JSON: %w", err)
+	}
+	return &layout, nil
 }
