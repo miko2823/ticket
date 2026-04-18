@@ -6,10 +6,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	firebase "firebase.google.com/go/v4"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/api/option"
 
 	"github.com/KaoriNakajima/sturdyticket/backend/internal/auth"
@@ -17,6 +19,8 @@ import (
 	bookingpg "github.com/KaoriNakajima/sturdyticket/backend/internal/booking/postgres"
 	"github.com/KaoriNakajima/sturdyticket/backend/internal/event"
 	eventpg "github.com/KaoriNakajima/sturdyticket/backend/internal/event/postgres"
+	"github.com/KaoriNakajima/sturdyticket/backend/internal/session"
+	sessionredis "github.com/KaoriNakajima/sturdyticket/backend/internal/session/redis"
 	"github.com/KaoriNakajima/sturdyticket/backend/pkg/response"
 )
 
@@ -48,9 +52,32 @@ func main() {
 
 	authMiddleware := auth.NewMiddleware(authClient)
 
+	// Initialize Redis
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "redis://localhost:6379"
+	}
+	redisOpts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("failed to parse REDIS_URL: %v", err)
+	}
+	redisClient := redis.NewClient(redisOpts)
+	defer redisClient.Close()
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Fatalf("failed to connect to redis: %v", err)
+	}
+
+	// Initialize session domain
+	sessionStore := sessionredis.NewStore(redisClient)
+	sessionService := session.NewService(sessionStore, 30*time.Second, 100)
+	sessionHandler := session.NewHandler(sessionService)
+
+	// Start session expiry subscriber
+	go sessionredis.StartSubscriber(ctx, redisClient)
+
 	// Initialize event domain
 	eventRepo := eventpg.NewRepository(pool)
-	eventUseCase := event.NewUseCase(eventRepo)
+	eventUseCase := event.NewUseCase(eventRepo, sessionService)
 	eventHandler := event.NewHandler(eventUseCase)
 
 	// Initialize booking domain
@@ -80,6 +107,7 @@ func main() {
 
 		eventHandler.RegisterProtectedRoutes(r)
 		bookingHandler.RegisterRoutes(r)
+		sessionHandler.RegisterRoutes(r)
 	})
 
 	port := os.Getenv("PORT")

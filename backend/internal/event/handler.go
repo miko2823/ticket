@@ -96,7 +96,8 @@ func (h *Handler) GetTicket(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ReserveTicket(w http.ResponseWriter, r *http.Request) {
 	ticketID := chi.URLParam(r, "ticketId")
 	userID := auth.UserIDFromContext(r.Context())
-	ticket, err := h.useCase.ReserveTicket(r.Context(), ticketID, userID)
+	sessionID := r.Header.Get("X-Session-ID")
+	ticket, err := h.useCase.ReserveTicket(r.Context(), ticketID, userID, sessionID)
 	if err != nil {
 		response.Error(w, http.StatusConflict, err.Error())
 		return

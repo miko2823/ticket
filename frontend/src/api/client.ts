@@ -2,9 +2,14 @@ import { auth } from "../auth/firebase";
 
 const BASE_URL = "/api/v1";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  options?: RequestInit,
+  extraHeaders?: Record<string, string>
+): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...extraHeaders,
   };
 
   const user = auth.currentUser;
@@ -28,7 +33,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  post: <T>(
+    path: string,
+    body: unknown,
+    extraHeaders?: Record<string, string>
+  ) =>
+    request<T>(
+      path,
+      { method: "POST", body: JSON.stringify(body) },
+      extraHeaders
+    ),
+  put: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };

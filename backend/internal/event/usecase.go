@@ -6,13 +6,19 @@ import (
 	"time"
 )
 
-// UseCase is the application service for the Event bounded context.
-type UseCase struct {
-	repo Repository
+// SessionValidator validates that a user has an active seat-map session.
+type SessionValidator interface {
+	ValidateSessionForEvent(ctx context.Context, sessionID, eventID, userID string) error
 }
 
-func NewUseCase(repo Repository) *UseCase {
-	return &UseCase{repo: repo}
+// UseCase is the application service for the Event bounded context.
+type UseCase struct {
+	repo             Repository
+	sessionValidator SessionValidator
+}
+
+func NewUseCase(repo Repository, sessionValidator SessionValidator) *UseCase {
+	return &UseCase{repo: repo, sessionValidator: sessionValidator}
 }
 
 func (uc *UseCase) ListEvents(ctx context.Context) ([]Event, error) {
@@ -31,11 +37,18 @@ func (uc *UseCase) GetTicket(ctx context.Context, id string) (*Ticket, error) {
 	return uc.repo.FindTicketByID(ctx, id)
 }
 
-// ReserveTicket checks availability and ticketing window, then reserves a ticket for 5 minutes.
-func (uc *UseCase) ReserveTicket(ctx context.Context, ticketID, userID string) (*Ticket, error) {
+// ReserveTicket checks session, availability, and ticketing window, then reserves a ticket for 5 minutes.
+func (uc *UseCase) ReserveTicket(ctx context.Context, ticketID, userID, sessionID string) (*Ticket, error) {
 	ticket, err := uc.repo.FindTicketByID(ctx, ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("ticket not found")
+	}
+
+	// Validate seat-map session
+	if uc.sessionValidator != nil {
+		if err := uc.sessionValidator.ValidateSessionForEvent(ctx, sessionID, ticket.EventID, userID); err != nil {
+			return nil, fmt.Errorf("invalid session: %w", err)
+		}
 	}
 
 	now := time.Now()
