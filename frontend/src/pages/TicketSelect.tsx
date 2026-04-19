@@ -13,7 +13,12 @@ function TicketSelect() {
   const [reserving, setReserving] = useState(false);
   const [key, setKey] = useState(0);
 
-  const { sessionId, error: sessionError, isConnecting } = useSession(id ?? "");
+  const {
+    sessionId,
+    error: sessionError,
+    isConnecting,
+    queueInfo,
+  } = useSession(id ?? "");
 
   const handleSeatSelect = (seat: SeatData) => {
     setSelected(seat);
@@ -40,6 +45,28 @@ function TicketSelect() {
   if (!id) return <p>No event selected.</p>;
   if (isConnecting) return <p>Connecting...</p>;
   if (sessionError) return <p style={{ color: "red" }}>{sessionError}</p>;
+
+  if (queueInfo) {
+    const minutes = Math.ceil(queueInfo.estimatedWait / 60);
+    return (
+      <div className={styles.container}>
+        <h2>Waiting Room</h2>
+        <div className={styles.queueBox}>
+          <p className={styles.queuePosition}>
+            You are <strong>#{queueInfo.position}</strong> in line
+          </p>
+          <p>Estimated wait: ~{minutes} min</p>
+          <p className={styles.queueMeta}>
+            {queueInfo.queueLength} people in queue
+          </p>
+          <p className={styles.queueNote}>
+            Please keep this page open. You will be automatically redirected
+            when it's your turn.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>

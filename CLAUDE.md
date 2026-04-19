@@ -24,7 +24,8 @@ to demonstrate how real ticketing systems handle high-load, concurrency, and abu
 | Frontend | React + Vite + TypeScript           |
 | Database | PostgreSQL (Cloud SQL on GCP)       |
 | Auth     | Firebase Authentication             |
-| Infra    | GCP — Cloud Run, Cloud SQL, Cloud Tasks, Pub/Sub |
+| Cache    | Redis (session management, waiting room)  |
+| Infra    | GCP — Cloud Run, Cloud SQL              |
 | IaC      | Terraform                           |
 | CI/CD    | GitHub Actions                      |
 
@@ -48,14 +49,21 @@ to demonstrate how real ticketing systems handle high-load, concurrency, and abu
 │   │   │   └── postgres/
 │   │   │       └── repository.go  # PostgreSQL adapter
 │   │   ├── booking/            # Booking bounded context (DDD)
-│   │   │   ├── domain.go       #   Aggregate: Booking, Value Objects, Domain Events
-│   │   │   ├── service.go      #   Domain service (incl. double-booking logic)
+│   │   │   ├── domain.go       #   Aggregate: Booking, Value Objects
 │   │   │   ├── usecase.go      #   Application service / use cases
 │   │   │   ├── handler.go      #   HTTP handler (delivery layer)
 │   │   │   ├── repository.go   #   Repository interface (port)
 │   │   │   └── postgres/
 │   │   │       └── repository.go  # PostgreSQL adapter
-│   │   ├── queue/              # Queue producer/consumer (Cloud Tasks / Pub/Sub)
+│   │   ├── session/            # Session bounded context (Redis-backed)
+│   │   │   ├── domain.go       #   Session struct
+│   │   │   ├── store.go        #   Store interface (port)
+│   │   │   ├── service.go      #   Application service (create, heartbeat, validate)
+│   │   │   ├── handler.go      #   HTTP handler
+│   │   │   ├── router.go       #   Route registration
+│   │   │   └── redis/
+│   │   │       ├── store.go       # Redis adapter (Lua scripts for atomicity)
+│   │   │       └── subscriber.go  # Keyspace notification listener (TTL cleanup)
 │   │   ├── ratelimit/          # Rate limiting middleware
 │   │   ├── circuitbreaker/     # Circuit breaker wrapper
 │   │   └── middleware/         # Logging, recovery, CORS, bot detection
@@ -111,26 +119,21 @@ Handler (Delivery layer)
 - **Domain Service** (`service.go`) — orchestrates domain logic that spans multiple aggregates. Depends only on repository interfaces, never on concrete implementations.
 - **Repository Interface** (`repository.go`) — Go interface defined in the domain package. The domain owns this interface; the DB adapter implements it.
 - **PostgreSQL Adapter** (`postgres/repository.go`) — implements the repository interface. All SQL lives here.
-- **Use Case / Application Service** (`usecase.go`) — coordinates domain services, repositories, and external ports (queue, auth). One file per use case is acceptable for clarity.
+- **Use Case / Application Service** (`usecase.go`) — coordinates domain services, repositories, and external ports (auth, session). One file per use case is acceptable for clarity.
 - **Handler** (`handler.go`) — HTTP concerns only: parse request, call use case, write response. No business logic here.
 
 **Aggregates and Bounded Contexts**
 
-| Bounded Context | Aggregate Root | Key Entities         |
-|-----------------|---------------|----------------------|
-| Event           | `Event`       | `Ticket`             |
-| Booking         | `Booking`     | —                    |
-| User (thin)     | Firebase UID  | no local aggregate   |
+| Bounded Context | Aggregate Root | Key Entities         | Storage    |
+|-----------------|---------------|----------------------|------------|
+| Event           | `Event`       | `Ticket`             | PostgreSQL |
+| Booking         | `Booking`     | —                    | PostgreSQL |
+| Session         | `Session`     | —                    | Redis      |
+| User (thin)     | Firebase UID  | no local aggregate   | Firebase   |
 
 - Each bounded context maps to one package under `internal/`
 - Aggregates are the only entry point for mutations — never modify child entities directly
 - Cross-context communication goes through use cases or domain events, never by importing another domain's internals
-
-**Domain Events**
-
-- Define events as plain structs in `domain.go`: e.g. `BookingConfirmed`, `TicketReserved`
-- Publish via the queue package (`internal/queue`) — domain layer defines the event, queue layer handles transport
-- Do not couple domain models to Pub/Sub or Cloud Tasks types
 
 **Value Objects**
 
@@ -205,25 +208,34 @@ Handler (Delivery layer)
 
 These are the core of this demo. Every one must be implemented properly.
 
-### 1. Double Booking Prevention
+### 1. Double Booking Prevention ✅
 **Decision: Optimistic locking with PostgreSQL**
 
 - `tickets` table has a `version` integer column
-- On booking: `UPDATE tickets SET status='reserved', version=version+1 WHERE id=$1 AND version=$2 AND status='available'`
+- On reserve: `UPDATE tickets SET status='reserved', version=version+1 WHERE id=$1 AND version=$2 AND status='available'`
 - If `rows affected == 0`, another request won the race — return HTTP 409 Conflict
 - Do NOT use application-level locks — the DB constraint is the source of truth
-- Wrap in a transaction with `REPEATABLE READ` isolation
+- 5-minute reservation hold with `reserved_by` (userID) and `reserved_until` (timestamp)
+- Expired reservations treated as available at query time via SQL CASE
 
-### 2. Queue-Based Booking
-**Decision: Cloud Tasks for async booking confirmation**
+### 2. Session-Based Seat Map Access Control ✅
+**Decision: Redis sessions with concurrency cap**
 
-- When a user submits a booking, immediately reserve the ticket (optimistic lock above) and enqueue a Cloud Tasks job
-- The job handles payment simulation, email confirmation, and final status update
-- Booking endpoint returns HTTP 202 Accepted with a `booking_id` for polling
-- Frontend polls `GET /api/v1/bookings/{id}/status` until confirmed or failed
-- Implement a dead-letter pattern: failed tasks after 3 retries move to a `failed_bookings` table
+- When a user enters the seat map page, a session is created in Redis (30s TTL, 10s heartbeat)
+- Per-event concurrency counter tracks how many users are on the seat map
+- Max concurrency cap (default 100) — groundwork for waiting room queue
+- Reserve endpoint requires valid session via `X-Session-ID` header
+- Redis keyspace notifications + subscriber goroutine for accurate counter cleanup on TTL expiry
+- Redis keys: `session:{eventID}:{sessionID}`, `event:{eventID}:active`, `user:{userID}:event:{eventID}:session`
 
-### 3. Rate Limiting
+### 3. Waiting Room Queue (TODO)
+**Decision: FIFO queue when concurrency cap is hit**
+
+- When `event:{eventID}:active` >= max concurrency, new users enter a waiting room
+- Show queue position and estimated wait time
+- As sessions end, admit users from the queue in FIFO order
+
+### 4. Rate Limiting (TODO)
 **Decision: Token bucket per user (Firebase UID) and per IP**
 
 - Implement in `internal/ratelimit/` as Chi middleware
@@ -231,28 +243,28 @@ These are the core of this demo. Every one must be implemented properly.
 - Limits: 10 booking attempts per user per minute, 100 requests per IP per minute
 - Return HTTP 429 with `Retry-After` header
 
-### 4. Circuit Breaker
+### 5. Circuit Breaker (TODO)
 **Decision: `sony/gobreaker` library**
 
-- Wrap any external call (Cloud Tasks enqueue, payment simulation) with a circuit breaker
+- Wrap any external call (payment simulation) with a circuit breaker
 - States: Closed → Open (after 5 failures in 10s) → Half-Open (after 30s)
 - When open, return HTTP 503 with a meaningful error message — do not hang
 - Log state transitions for observability
 
-### 5. Bot Detection
+### 6. Bot Detection (TODO)
 **Decision: Firebase App Check + request heuristics**
 
 - Frontend integrates Firebase App Check with reCAPTCHA v3
 - Backend middleware validates the `X-Firebase-AppCheck` token on booking endpoints
 - Secondary heuristic check in middleware: flag requests with no `User-Agent`, suspiciously high rates, or sequential ticket IDs
 
-### 6. Scaling
+### 7. Scaling
 **Decision: Cloud Run with autoscaling**
 
 - Backend deployed to Cloud Run — stateless, scales to zero
 - Min instances: 1 (avoid cold start on demo), Max instances: 10
-- All state in PostgreSQL or Cloud Tasks — no in-process state that breaks horizontal scaling
-- Note: in-memory rate limiter must be replaced with Redis if scaling beyond 1 instance (document this clearly in code comments)
+- All state in PostgreSQL or Redis — no in-process state that breaks horizontal scaling
+- Note: in-memory rate limiter must be replaced with Redis if scaling beyond 1 instance
 
 ---
 
@@ -261,22 +273,27 @@ These are the core of this demo. Every one must be implemented properly.
 ```sql
 -- Events
 CREATE TABLE events (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        TEXT NOT NULL,
-  venue       TEXT NOT NULL,
-  starts_at   TIMESTAMPTZ NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                TEXT NOT NULL,
+  venue               TEXT NOT NULL,
+  starts_at           TIMESTAMPTZ NOT NULL,
+  ticketing_starts_at TIMESTAMPTZ NOT NULL,
+  ticketing_ends_at   TIMESTAMPTZ NOT NULL,
+  seat_layout         JSONB,              -- canvas-based seat map (positions, sections)
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Tickets (one row per seat)
 CREATE TABLE tickets (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id    UUID NOT NULL REFERENCES events(id),
-  seat_label  TEXT NOT NULL,           -- e.g. "A-12"
-  price_jpy   INTEGER NOT NULL,
-  status      TEXT NOT NULL DEFAULT 'available', -- available | reserved | sold | cancelled
-  version     INTEGER NOT NULL DEFAULT 0,         -- optimistic lock version
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id       UUID NOT NULL REFERENCES events(id),
+  seat_label     TEXT NOT NULL,           -- e.g. "A-12"
+  price_jpy      INTEGER NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'available', -- available | reserved | sold | cancelled
+  version        INTEGER NOT NULL DEFAULT 0,         -- optimistic lock version
+  reserved_by    TEXT,                    -- Firebase UID of user who reserved
+  reserved_until TIMESTAMPTZ,            -- reservation expiry (5 min)
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(event_id, seat_label)
 );
 

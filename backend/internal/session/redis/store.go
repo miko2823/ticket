@@ -148,3 +148,88 @@ func (s *Store) GetActiveCount(ctx context.Context, eventID string) (int, error)
 	}
 	return count, nil
 }
+
+// --- Queue operations ---
+
+func queueKey(eventID string) string {
+	return fmt.Sprintf("queue:%s", eventID)
+}
+
+func admittedKey(eventID, userID string) string {
+	return fmt.Sprintf("queue:%s:%s:admitted", eventID, userID)
+}
+
+func (s *Store) EnqueueUser(ctx context.Context, eventID, userID string) error {
+	score := float64(time.Now().UnixMicro())
+	// NX: only add if not already a member
+	added, err := s.client.ZAddNX(ctx, queueKey(eventID), redis.Z{Score: score, Member: userID}).Result()
+	if err != nil {
+		return err
+	}
+	_ = added // 0 if already queued, 1 if newly added
+	return nil
+}
+
+func (s *Store) DequeueUser(ctx context.Context, eventID, userID string) error {
+	return s.client.ZRem(ctx, queueKey(eventID), userID).Err()
+}
+
+func (s *Store) GetQueuePosition(ctx context.Context, eventID, userID string) (int, error) {
+	rank, err := s.client.ZRank(ctx, queueKey(eventID), userID).Result()
+	if err == redis.Nil {
+		return -1, nil
+	}
+	if err != nil {
+		return -1, err
+	}
+	return int(rank), nil
+}
+
+func (s *Store) GetQueueLength(ctx context.Context, eventID string) (int, error) {
+	length, err := s.client.ZCard(ctx, queueKey(eventID)).Result()
+	if err != nil {
+		return 0, err
+	}
+	return int(length), nil
+}
+
+// AdmitNextUser atomically checks capacity, dequeues the front user, and sets an admission token.
+var admitScript = redis.NewScript(`
+local active = tonumber(redis.call('GET', KEYS[2]) or '0')
+local maxConcurrency = tonumber(ARGV[1])
+if active >= maxConcurrency then return '' end
+local members = redis.call('ZRANGE', KEYS[1], 0, 0)
+if #members == 0 then return '' end
+local userID = members[1]
+redis.call('ZREM', KEYS[1], userID)
+redis.call('SET', KEYS[3] .. userID .. ':admitted', '1', 'EX', 30)
+return userID
+`)
+
+func (s *Store) AdmitNextUser(ctx context.Context, eventID string, maxConcurrency int) (string, error) {
+	result, err := admitScript.Run(ctx, s.client,
+		[]string{
+			queueKey(eventID),
+			activeKey(eventID),
+			fmt.Sprintf("queue:%s:", eventID),
+		},
+		maxConcurrency,
+	).Result()
+	if err != nil {
+		return "", err
+	}
+	userID, _ := result.(string)
+	return userID, nil
+}
+
+func (s *Store) IsAdmitted(ctx context.Context, eventID, userID string) (bool, error) {
+	exists, err := s.client.Exists(ctx, admittedKey(eventID, userID)).Result()
+	if err != nil {
+		return false, err
+	}
+	return exists > 0, nil
+}
+
+func (s *Store) ClearAdmission(ctx context.Context, eventID, userID string) error {
+	return s.client.Del(ctx, admittedKey(eventID, userID)).Err()
+}

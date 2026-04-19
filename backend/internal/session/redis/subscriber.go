@@ -11,7 +11,10 @@ import (
 // StartSubscriber listens for expired session keys and decrements the
 // per-event active counter. Requires Redis keyspace notifications enabled
 // with: redis-server --notify-keyspace-events Ex
-func StartSubscriber(ctx context.Context, client *redis.Client) {
+//
+// onSessionEnd is called after a session expires and the counter is decremented,
+// allowing the caller to admit the next queued user.
+func StartSubscriber(ctx context.Context, client *redis.Client, onSessionEnd func(ctx context.Context, eventID string)) {
 	pubsub := client.PSubscribe(ctx, "__keyevent@0__:expired")
 	defer pubsub.Close()
 
@@ -26,19 +29,15 @@ func StartSubscriber(ctx context.Context, client *redis.Client) {
 			if !ok {
 				return
 			}
-			handleExpiredKey(ctx, client, msg.Payload)
+			handleExpiredKey(ctx, client, msg.Payload, onSessionEnd)
 		}
 	}
 }
 
 // handleExpiredKey processes an expired key notification.
 // Session keys have the format: session:{eventID}:{sessionID}
-func handleExpiredKey(ctx context.Context, client *redis.Client, key string) {
+func handleExpiredKey(ctx context.Context, client *redis.Client, key string, onSessionEnd func(ctx context.Context, eventID string)) {
 	if !strings.HasPrefix(key, "session:") {
-		return
-	}
-	// Skip user-event mapping keys
-	if strings.HasPrefix(key, "user:") {
 		return
 	}
 
@@ -59,4 +58,8 @@ func handleExpiredKey(ctx context.Context, client *redis.Client, key string) {
 	}
 
 	log.Printf("session subscriber: session expired for event %s, active count: %d", eventID, max(count, 0))
+
+	if onSessionEnd != nil {
+		onSessionEnd(ctx, eventID)
+	}
 }

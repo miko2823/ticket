@@ -69,11 +69,13 @@ func main() {
 
 	// Initialize session domain
 	sessionStore := sessionredis.NewStore(redisClient)
-	sessionService := session.NewService(sessionStore, 30*time.Second, 100)
+	sessionService := session.NewService(sessionStore, 30*time.Second, 1)
 	sessionHandler := session.NewHandler(sessionService)
 
-	// Start session expiry subscriber
-	go sessionredis.StartSubscriber(ctx, redisClient)
+	// Start session expiry subscriber — admits next queued user when a session expires
+	go sessionredis.StartSubscriber(ctx, redisClient, func(ctx context.Context, eventID string) {
+		sessionService.AdmitNext(ctx, eventID)
+	})
 
 	// Initialize event domain
 	eventRepo := eventpg.NewRepository(pool)

@@ -24,8 +24,13 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 
 	sessionID, err := h.service.CreateSession(r.Context(), eventID, userID)
 	if err != nil {
-		if err.Error() == "seat map is full, please wait" {
-			response.Error(w, http.StatusServiceUnavailable, err.Error())
+		if qe, ok := err.(*QueuedError); ok {
+			response.JSON(w, http.StatusAccepted, map[string]interface{}{
+				"status":                 "queued",
+				"position":               qe.Position,
+				"estimated_wait_seconds": qe.EstimatedWait,
+				"queue_length":           qe.QueueLength,
+			})
 			return
 		}
 		response.Error(w, http.StatusInternalServerError, "failed to create session")
@@ -36,6 +41,31 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		"session_id":            sessionID,
 		"heartbeat_interval_ms": h.service.HeartbeatIntervalMs(),
 	})
+}
+
+func (h *Handler) GetQueueStatus(w http.ResponseWriter, r *http.Request) {
+	eventID := chi.URLParam(r, "id")
+	userID := auth.UserIDFromContext(r.Context())
+
+	status, err := h.service.GetQueueStatus(r.Context(), eventID, userID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "failed to get queue status")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, status)
+}
+
+func (h *Handler) LeaveQueue(w http.ResponseWriter, r *http.Request) {
+	eventID := chi.URLParam(r, "id")
+	userID := auth.UserIDFromContext(r.Context())
+
+	if err := h.service.LeaveQueue(r.Context(), eventID, userID); err != nil {
+		response.Error(w, http.StatusInternalServerError, "failed to leave queue")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"status": "left"})
 }
 
 func (h *Handler) RefreshSession(w http.ResponseWriter, r *http.Request) {
