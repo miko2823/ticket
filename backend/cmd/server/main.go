@@ -19,6 +19,7 @@ import (
 	bookingpg "github.com/KaoriNakajima/sturdyticket/backend/internal/booking/postgres"
 	"github.com/KaoriNakajima/sturdyticket/backend/internal/event"
 	eventpg "github.com/KaoriNakajima/sturdyticket/backend/internal/event/postgres"
+	"github.com/KaoriNakajima/sturdyticket/backend/internal/recaptcha"
 	"github.com/KaoriNakajima/sturdyticket/backend/internal/session"
 	sessionredis "github.com/KaoriNakajima/sturdyticket/backend/internal/session/redis"
 	"github.com/KaoriNakajima/sturdyticket/backend/pkg/response"
@@ -87,9 +88,16 @@ func main() {
 	bookingUseCase := booking.NewUseCase(bookingRepo, eventRepo)
 	bookingHandler := booking.NewHandler(bookingUseCase)
 
+	// Initialize reCAPTCHA verifier
+	recaptchaSecret := os.Getenv("RECAPTCHA_SECRET_KEY")
+	if recaptchaSecret == "" {
+		log.Fatal("RECAPTCHA_SECRET_KEY is required")
+	}
+	captcha := recaptcha.NewVerifier(recaptchaSecret, 0.5).RequireToken
+
 	r := chi.NewRouter()
 
-	// TODO: set up middleware (logging, recovery, CORS, rate limiting, bot detection)
+	// TODO: set up middleware (logging, recovery, CORS, rate limiting)
 
 	// Public routes
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -107,9 +115,9 @@ func main() {
 			response.JSON(w, http.StatusOK, map[string]string{"uid": uid})
 		})
 
-		eventHandler.RegisterProtectedRoutes(r)
-		bookingHandler.RegisterRoutes(r)
-		sessionHandler.RegisterRoutes(r)
+		eventHandler.RegisterProtectedRoutes(r, captcha)
+		sessionHandler.RegisterRoutes(r, captcha)
+		bookingHandler.RegisterRoutes(r, captcha)
 	})
 
 	port := os.Getenv("PORT")

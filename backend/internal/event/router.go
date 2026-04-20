@@ -1,6 +1,13 @@
 package event
 
-import "github.com/go-chi/chi/v5"
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+)
+
+// CaptchaMiddleware returns reCAPTCHA middleware for a given action.
+type CaptchaMiddleware = func(action string) func(http.Handler) http.Handler
 
 // RegisterPublicRoutes registers event routes that don't require auth.
 func (h *Handler) RegisterPublicRoutes(r chi.Router) {
@@ -12,7 +19,7 @@ func (h *Handler) RegisterPublicRoutes(r chi.Router) {
 }
 
 // RegisterProtectedRoutes registers event routes that require auth.
-func (h *Handler) RegisterProtectedRoutes(r chi.Router) {
-	r.Post("/api/v1/tickets/{ticketId}/reserve", h.ReserveTicket)
+func (h *Handler) RegisterProtectedRoutes(r chi.Router, captcha CaptchaMiddleware) {
+	r.With(captcha("reserve_ticket")).Post("/api/v1/tickets/{ticketId}/reserve", h.ReserveTicket)
 	r.Delete("/api/v1/tickets/{ticketId}/reserve", h.ReleaseTicket)
 }

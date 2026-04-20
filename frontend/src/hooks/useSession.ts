@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
+import { getRecaptchaToken } from "../api/recaptcha";
 
 interface SessionCreatedResponse {
   session_id: string;
@@ -56,9 +57,11 @@ export function useSession(eventId: string) {
     };
 
     const createSession = async (): Promise<boolean> => {
+      const recaptchaToken = await getRecaptchaToken("create_session");
       const res = await api.post<CreateResponse>(
         `/events/${eventId}/session`,
-        {}
+        {},
+        recaptchaToken ? { "X-Recaptcha-Token": recaptchaToken } : undefined
       );
       if (cancelled) return false;
 

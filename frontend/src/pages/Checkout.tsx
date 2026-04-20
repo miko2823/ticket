@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { getRecaptchaToken } from "../api/recaptcha";
 
 interface Ticket {
   id: string;
@@ -62,9 +63,10 @@ function Checkout() {
     setPaying(true);
     setError("");
     try {
+      const recaptchaToken = await getRecaptchaToken("create_booking");
       const result = await api.post<BookingResponse>("/bookings", {
         ticket_id: ticketId,
-      });
+      }, recaptchaToken ? { "X-Recaptcha-Token": recaptchaToken } : undefined);
       setBooking(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Payment failed");

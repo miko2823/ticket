@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { getRecaptchaToken } from "../api/recaptcha";
 import { useSession } from "../hooks/useSession";
 import SeatMap from "../components/SeatMap";
 import type { SeatData } from "../components/SeatMap";
@@ -28,8 +29,10 @@ function TicketSelect() {
     if (!selected || !sessionId.current) return;
     setReserving(true);
     try {
+      const recaptchaToken = await getRecaptchaToken("reserve_ticket");
       await api.post(`/tickets/${selected.ticket_id}/reserve`, {}, {
         "X-Session-ID": sessionId.current,
+        ...(recaptchaToken && { "X-Recaptcha-Token": recaptchaToken }),
       });
       navigate(`/checkout?ticketId=${selected.ticket_id}&eventId=${id}`);
     } catch (err) {
