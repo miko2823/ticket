@@ -64,9 +64,10 @@ to demonstrate how real ticketing systems handle high-load, concurrency, and abu
 │   │   │   └── redis/
 │   │   │       ├── store.go       # Redis adapter (Lua scripts for atomicity)
 │   │   │       └── subscriber.go  # Keyspace notification listener (TTL cleanup)
+│   │   ├── recaptcha/          # reCAPTCHA v3 verification middleware
 │   │   ├── ratelimit/          # Rate limiting middleware
 │   │   ├── circuitbreaker/     # Circuit breaker wrapper
-│   │   └── middleware/         # Logging, recovery, CORS, bot detection
+│   │   └── middleware/         # Logging, recovery, CORS
 │   ├── pkg/                # shared utilities (response helpers, errors, config)
 │   ├── migrations/         # SQL migration files (golang-migrate format)
 │   ├── go.mod
@@ -228,12 +229,15 @@ These are the core of this demo. Every one must be implemented properly.
 - Redis keyspace notifications + subscriber goroutine for accurate counter cleanup on TTL expiry
 - Redis keys: `session:{eventID}:{sessionID}`, `event:{eventID}:active`, `user:{userID}:event:{eventID}:session`
 
-### 3. Waiting Room Queue (TODO)
-**Decision: FIFO queue when concurrency cap is hit**
+### 3. Waiting Room Queue ✅
+**Decision: Redis Sorted Set FIFO queue**
 
-- When `event:{eventID}:active` >= max concurrency, new users enter a waiting room
-- Show queue position and estimated wait time
-- As sessions end, admit users from the queue in FIFO order
+- When `event:{eventID}:active` >= max concurrency, new users are enqueued (ZADD with timestamp score)
+- Frontend polls `GET /events/{id}/queue` every 3s for position and estimated wait
+- On session end/expiry, subscriber calls `AdmitNext` which atomically dequeues front user and sets admission token (30s TTL)
+- Admitted user's next poll returns `"admitted"` → creates session → seat map loads
+- `POST /session` returns HTTP 202 with queue info when user is queued
+- Redis keys: `queue:{eventID}` (sorted set), `queue:{eventID}:{userID}:admitted` (admission token)
 
 ### 4. Rate Limiting (TODO)
 **Decision: Token bucket per user (Firebase UID) and per IP**
@@ -251,12 +255,14 @@ These are the core of this demo. Every one must be implemented properly.
 - When open, return HTTP 503 with a meaningful error message — do not hang
 - Log state transitions for observability
 
-### 6. Bot Detection (TODO)
-**Decision: Firebase App Check + request heuristics**
+### 6. Bot Detection ✅
+**Decision: reCAPTCHA v3 (score-based, invisible)**
 
-- Frontend integrates Firebase App Check with reCAPTCHA v3
-- Backend middleware validates the `X-Firebase-AppCheck` token on booking endpoints
-- Secondary heuristic check in middleware: flag requests with no `User-Agent`, suspiciously high rates, or sequential ticket IDs
+- Google's reCAPTCHA v3 script runs in background, observes user behavior, sends data directly to Google
+- Frontend calls `grecaptcha.execute(siteKey, { action })` before protected actions and sends token via `X-Recaptcha-Token` header
+- Backend middleware in `internal/recaptcha/` verifies token with Google's siteverify API: checks success, action match, and score >= 0.5
+- Protected endpoints: `POST /session` (create_session), `POST /tickets/{id}/reserve` (reserve_ticket), `POST /bookings` (create_booking)
+- `RECAPTCHA_SECRET_KEY` (backend) and `VITE_RECAPTCHA_SITE_KEY` (frontend) are required env vars
 
 ### 7. Scaling
 **Decision: Cloud Run with autoscaling**
