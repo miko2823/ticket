@@ -16,7 +16,7 @@ jobs:
       - uses: actions/create-github-app-token@v3
         id: get-installation-token
         with:
-          app-id: 3474579
+          client-id: Iv23licFqbWsDrBD8hcw
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Create and push release branch
