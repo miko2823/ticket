@@ -1,0 +1,15 @@
+name: Echo
+
+on:
+  push:
+    branches:
+      - release/*
+
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo trigger info
+        run: |
+          echo "Triggered by push to branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
